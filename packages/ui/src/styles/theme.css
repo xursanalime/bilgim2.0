@@ -1,0 +1,181 @@
+/*
+ * @bilgim/ui — tema tokenlari va bazaviy komponent stillari.
+ * Manba: docs/bilgim2.0.md §8.1 (tenant dark-purple) va §8.2 (root lime-purple).
+ *
+ * Qoida: komponentlar faqat semantic token ishlatadi; hex hardcode taqiqlangan.
+ * Tenant product — dark-first bitta mavzu (§8.1); root landing alohida lime
+ * accentni faqat conversion/highlight uchun ishlatadi.
+ */
+:root {
+  /* Ranglar — tenant product tema (§8.1) */
+  --canvas: #0a0a0f;
+  --surface: #12121a;
+  --border: #232332;
+  --text: #f5f5f7;
+  --text-muted: #a1a1b5;
+  --accent: #6c63ff;
+  --accent-hover: #857dff;
+  --success: #36d399;
+  --warning: #fbbf24;
+  --danger: #fb7185;
+
+  /* Root marketing lime — FAQAT conversion/highlight uchun (§8.2).
+     Katta textda ishlatilmasin: WCAG kontrast buzilmasin. */
+  --accent-lime: #a3e635;
+
+  /* Radius */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+
+  /* Spacing — 8px scale */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', monospace;
+
+  /* Focus ring — accent rangida, klaviatura fokus uchun majburiy */
+  --focus-ring: 0 0 0 2px var(--canvas), 0 0 0 4px var(--accent);
+}
+
+/* ---------- Reset ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  padding: 0;
+  margin: 0;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* Motion faqat state transition uchun; accessibility qoidasi (§8.1) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Button ---------- */
+.bil-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  font-family: inherit;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.bil-btn:disabled,
+.bil-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bil-btn--sm {
+  height: 32px;
+  padding-inline: 12px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+}
+
+.bil-btn--md {
+  height: 40px;
+  padding-inline: 16px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+}
+
+.bil-btn--lg {
+  height: 48px;
+  padding-inline: 24px;
+  font-size: 16px;
+  border-radius: var(--radius-md);
+}
+
+/* Primary — accent rangli asosiy action */
+.bil-btn--primary {
+  background-color: var(--accent);
+  color: #ffffff;
+}
+
+.bil-btn--primary:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--accent-hover);
+}
+
+/* Secondary — elevated surface + border */
+.bil-btn--secondary {
+  background-color: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.bil-btn--secondary:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--accent);
+}
+
+/* Ghost — bordersiz ikkinchi darajali action */
+.bil-btn--ghost {
+  background-color: transparent;
+  color: var(--text-muted);
+}
+
+.bil-btn--ghost:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+/* Danger — destructive action; confirm dialog bilan birga ishlatiladi */
+.bil-btn--danger {
+  background-color: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.bil-btn--danger:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--danger);
+  color: #ffffff;
+}
