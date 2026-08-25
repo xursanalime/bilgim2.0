@@ -13,6 +13,8 @@ export default tseslint.config(
       '**/playwright-report/**',
       '**/test-results/**',
       '**/generated/**',
+      // Next.js tarbiyat qilgan tip referans fayli — triple-slash bilan yoziladi.
+      '**/next-env.d.ts',
     ],
   },
   eslint.configs.recommended,

@@ -1,5 +1,8 @@
 import { Controller, Get, Header, Res } from '@nestjs/common';
 import type { Response } from 'express';
+// MetricsService constructorga injekt qilinadi — runtime import talab (DI uchun),
+// shuning uchun type-only import emas.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
 import { MetricsService } from './metrics.service';
 
 /**

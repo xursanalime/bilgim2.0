@@ -2,7 +2,7 @@
 //
 // Qoidalar:
 //  - UUID primary keylar; timestamps UTC timestamptz;
-//  - global rol yo'q — rol SchoolMember jadvalida (Faza 1'da qo'shiladi);
+//  - global rol yo'q — rol SchoolMember jadvalida (§1.2);
 //  - har tenant jadvali school_id bilan scope qilinadi — istisno yo'q.
 
 generator client {
@@ -19,6 +19,48 @@ enum UserStatus {
   ACTIVE
   SUSPENDED
   DELETED
+}
+
+/// Maktab holati (§2.1). ACTIVE boshqa statuslarga o'tishi mumkin; slug har doim reserve.
+enum SchoolStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+/// Rol maktabga tegishli (SchoolMember), global User.rolega emas (§1.2).
+enum SchoolMemberRole {
+  OWNER
+  TEACHER
+  ASSISTANT
+  MODERATOR
+  STUDENT
+}
+
+enum SchoolMemberStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum SchoolDomainKind {
+  PLATFORM_SUBDOMAIN
+  CUSTOM
+}
+
+/// Public landing template'lari (§4.1.1). Faqat layout almashtiradi; data modeli bir xil.
+enum LandingTemplate {
+  CLASSIC
+  MINIMAL
+  BOLD
+}
+
+enum ConsentStatus {
+  NONE
+  PENDING
+  GRANTED
+  REVOKED
 }
 
 /// Global user — authentication subyekti. Rol shu yerda YO'Q (§1.2):
@@ -40,7 +82,226 @@ model User {
 
   sessions Session[]
 
+  // Faza 1 — tenant/identity munosabatlari
+  schoolMembers SchoolMember[]
+  ownedSchools  School[]       @relation("SchoolOwner")
+  testimonials  LandingTestimonial[]
+
   @@map("users")
+}
+
+/// Schools — har bir maktab slug.bilgim.uz subdomenida (§2, §6.2).
+model School {
+  id            String       @id @default(uuid()) @db.Uuid
+  slug          String       @unique @db.Citext
+  name          String
+  status        SchoolStatus @default(DRAFT)
+  ownerUserId   String       @map("owner_user_id") @db.Uuid
+  timezone      String       @default("Asia/Tashkent")
+  defaultLocale String       @default("uz") @map("default_locale")
+  /// Brand tokenlari, logo/cover va owner public profili — JsonB (query qilinmaydi)
+  brandJson     Json?        @map("brand_json") @db.JsonB
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz()
+
+  owner User        @relation("SchoolOwner", fields: [ownerUserId], references: [id])
+  members SchoolMember[]
+  holidays SchoolHoliday[]
+  invites  SchoolInvitation[]
+  domains  SchoolDomain[]
+  landing  SchoolLandingPage?
+  highlights LandingHighlight[]
+  successStories LandingSuccessStory[]
+  testimonials LandingTestimonial[]
+
+  @@index([ownerUserId])
+  @@map("schools")
+}
+
+/// Maktabning mahalliy kalendar ta'til kunlari — streak calculator va calendar source-of-truth (§4.3.1).
+model SchoolHoliday {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  startAt   DateTime @map("start_at") @db.Timestamptz()
+  endAt     DateTime @map("end_at") @db.Timestamptz()
+  title     String
+  isPublished Boolean @default(true) @map("is_published")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("school_holidays")
+}
+
+/// Tenant authorization — rol va status maktabga scope (§5.3).
+model SchoolMember {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @map("school_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  role      SchoolMemberRole
+  status    SchoolMemberStatus @default(INVITED)
+  invitedBy String?   @map("invited_by") @db.Uuid
+  joinedAt  DateTime? @map("joined_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, userId])
+  @@index([userId, status])
+  @@map("school_members")
+}
+
+/// Root `/my-schools` minimal sumkasi uchun account-level read model (§2.2).
+model MemberSchoolSummary {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  schoolId      String    @map("school_id") @db.Uuid
+  nextLessonAt  DateTime? @map("next_lesson_at") @db.Timestamptz()
+  unreadMessageCount Int  @default(0) @map("unread_message_count")
+  membershipVersion Int  @default(1) @map("membership_version")
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([userId, schoolId])
+  @@index([userId])
+  @@map("member_school_summaries")
+}
+
+/// Maktabga taklif — hashed token; yakuniy target e-mail (P1'da implementatsiya).
+model SchoolInvitation {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  tokenHash   String   @unique @map("token_hash")
+  targetEmail String   @map("target_email")
+  role        SchoolMemberRole
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz()
+  acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz()
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz()
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("school_invitations")
+}
+
+/// Reserved hostname'lar — P1'da faqat platforma subdomen satri yaratiladi.
+model SchoolDomain {
+  id            String           @id @default(uuid()) @db.Uuid
+  schoolId      String           @map("school_id") @db.Uuid
+  hostname      String           @unique @db.Citext
+  kind          SchoolDomainKind
+  verifiedAt    DateTime?        @map("verified_at") @db.Timestamptz()
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("school_domains")
+}
+
+/// Public landing — one-to-one; unsafe HTML field yo'q (§4.1.1).
+model SchoolLandingPage {
+  id                 String          @id @default(uuid()) @db.Uuid
+  schoolId           String          @unique @map("school_id") @db.Uuid
+  template           LandingTemplate @default(CLASSIC)
+  heroJson           Json?           @map("hero") @db.JsonB
+  faqJson            Json?           @map("faq") @db.JsonB
+  contactJson        Json?           @map("contact") @db.JsonB
+  seoJson            Json?           @map("seo") @db.JsonB
+  isPublished        Boolean         @default(false) @map("is_published")
+  publishedVersion   Int?            @map("published_version")
+  publishedAt        DateTime?       @map("published_at") @db.Timestamptz()
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz()
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("school_landing_pages")
+}
+
+/// Owner-defined trust metric (audit bilan) — §4.1.1 Trust metrics bloki.
+model LandingHighlight {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  label       String
+  value       String
+  iconKey     String?  @map("icon_key")
+  position    Int      @default(0)
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("landing_highlights")
+}
+
+/// Student natija hikoyasi — PUBLIC_CONSENT bo'lmasa query'dan ham chiqmaydi (§4.1.1).
+model LandingSuccessStory {
+  id             String        @id @default(uuid()) @db.Uuid
+  schoolId       String        @map("school_id") @db.Uuid
+  title          String
+  body           String
+  metricLabel    String?       @map("metric_label")
+  metricValue    String?       @map("metric_value")
+  studentAlias   String        @map("student_alias")
+  consentStatus  ConsentStatus @default(PENDING) @map("consent_status")
+  consentedAt    DateTime?     @map("consented_at") @db.Timestamptz()
+  isPublished    Boolean       @default(false) @map("is_published")
+  position       Int           @default(0)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("landing_success_stories")
+}
+
+/// Testimonial — author consenti talab; owner o'zi yozgan fikrni testimonial deb publish qila olmaydi (§4.1.1).
+model LandingTestimonial {
+  id            String        @id @default(uuid()) @db.Uuid
+  schoolId      String        @map("school_id") @db.Uuid
+  authorUserId  String?       @map("author_user_id") @db.Uuid
+  displayName   String        @map("display_name")
+  body          String
+  courseLabel   String?       @map("course_label")
+  consentStatus ConsentStatus @default(PENDING) @map("consent_status")
+  consentedAt   DateTime?     @map("consented_at") @db.Timestamptz()
+  isPublished   Boolean       @default(false) @map("is_published")
+  position      Int           @default(0)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+
+  school School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  author User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, isPublished])
+  @@map("landing_testimonials")
+}
+
+/// Audit log — plan/identity mutatsiyalari uchun immutable hash zanjiri (§9).
+model AuditEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String?  @map("school_id") @db.Uuid
+  actorUserId  String   @map("actor_user_id") @db.Uuid
+  action       String
+  entityType   String   @map("entity_type")
+  entityId     String?  @map("entity_id")
+  requestId    String?  @map("request_id")
+  ipAddress    String?  @map("ip_address")
+  prevJson     Json?    @map("prev") @db.JsonB
+  nextJson     Json?    @map("next") @db.JsonB
+  hash         String
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([schoolId, createdAt])
+  @@index([actorUserId])
+  @@map("audit_events")
 }
 
 /// Refresh session — hashed refresh token, rotation/reuse detection Faza 1'da.
