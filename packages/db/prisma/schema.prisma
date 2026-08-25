@@ -1223,3 +1223,138 @@ model Recording {
   @@index([schoolId])
   @@map("recordings")
 }
+
+// ── Notifications / Community / Chat (Faza 3/6, §6.6) ──────────────────────
+
+/// In-app notification — school/event context; channel consent (§9).
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String?  @map("school_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  type      String
+  title     String
+  body      String?
+  dataJson  Json?    @map("data_json") @db.JsonB
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+/// Telegram phone linking — encrypted chat id (deep-link /start nonce, §4.2).
+model TelegramLink {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  telegramChatId    String   @unique @map("telegram_chat_id")
+  isActive          Boolean  @default(true) @map("is_active")
+  notificationsOptIn Boolean @default(true) @map("notifications_opt_in")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([userId])
+  @@map("telegram_links")
+}
+
+/// Community space — SCHOOL|COHORT|ANNOUNCEMENT (§4.2, §6.6).
+model CommunitySpace {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  cohortId     String?  @map("cohort_id") @db.Uuid
+  type         String   @default("SCHOOL")
+  slug         String
+  title        String
+  visibility   String   @default("MEMBERS")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  posts CommunityPost[]
+
+  @@unique([schoolId, slug])
+  @@map("community_spaces")
+}
+
+model CommunityPost {
+  id        String   @id @default(uuid()) @db.Uuid
+  spaceId   String   @map("space_id") @db.Uuid
+  authorMemberId String @map("author_member_id") @db.Uuid
+  body      String
+  status    String   @default("PUBLISHED")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  space CommunitySpace @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  reactions CommunityPostReaction[]
+  comments  CommunityComment[]
+
+  @@index([spaceId, createdAt])
+  @@map("community_posts")
+}
+
+model CommunityPostReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  memberId  String   @map("member_id") @db.Uuid
+  reaction  String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, memberId, reaction])
+  @@map("community_post_reactions")
+}
+
+model CommunityComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  authorMemberId String @map("author_member_id") @db.Uuid
+  body      String
+  status    String   @default("PUBLISHED")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@map("community_comments")
+}
+
+/// Chat rooms — school-scoped; sequence cursor (§6.6).
+model ChatRoom {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  type      String   // DM | GROUP
+  title     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  members  ChatMember[]
+  messages ChatMessage[]
+
+  @@index([schoolId])
+  @@map("chat_rooms")
+}
+
+model ChatMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  roomId    String   @map("room_id") @db.Uuid
+  memberId  String   @map("member_id") @db.Uuid
+  lastReadSeq Int    @default(0) @map("last_read_seq")
+  joinedAt  DateTime @default(now()) @map("joined_at") @db.Timestamptz()
+
+  room ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, memberId])
+  @@map("chat_members")
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  roomId    String   @map("room_id") @db.Uuid
+  authorMemberId String @map("author_member_id") @db.Uuid
+  body      String
+  sequence  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  room ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, sequence])
+  @@index([roomId, sequence])
+  @@map("chat_messages")
+}
