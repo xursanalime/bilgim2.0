@@ -96,6 +96,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@bilgim/domain':
+        specifier: workspace:^
+        version: link:../../packages/domain
       '@bilgim/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
