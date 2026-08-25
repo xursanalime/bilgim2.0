@@ -1009,3 +1009,129 @@ model StudentBadge {
   @@index([profileId])
   @@map("student_badges")
 }
+
+// ── Homework (Faza 4, §6.4) ────────────────────────────────────────────────
+
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum ModuleType {
+  MCG
+  WRITING
+  READING
+  LISTENING
+  SPEAKING
+  GRAMMAR
+  VOCABULARY
+  GAP_FILL
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  RETURNED
+  GRADED
+}
+
+enum ScoreSource {
+  AUTO
+  AI_SUGGESTION
+  TEACHER
+}
+
+/// Assignment — lesson'ga bog'liq; max_points va rubric (§4.3, §6.4).
+model Assignment {
+  id          String           @id @default(uuid()) @db.Uuid
+  schoolId    String           @map("school_id") @db.Uuid
+  lessonId    String           @map("lesson_id") @db.Uuid
+  title       String
+  instructions String?
+  dueAt       DateTime?        @map("due_at") @db.Timestamptz()
+  maxPoints   Int              @default(100) @map("max_points")
+  rubricJson  Json?            @map("rubric_json") @db.JsonB
+  status      AssignmentStatus @default(DRAFT)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz()
+
+  modules    AssignmentModule[]
+  submissions Submission[]
+
+  @@index([schoolId, lessonId])
+  @@map("assignments")
+}
+
+/// Assignment moduli — type + config JSON (server runtime tekshiriladi, §6.4).
+model AssignmentModule {
+  id           String     @id @default(uuid()) @db.Uuid
+  assignmentId String     @map("assignment_id") @db.Uuid
+  type         ModuleType
+  configJson   Json?      @map("config_json") @db.JsonB
+  position     Int        @default(0)
+  weight       Int        @default(1)
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, position])
+  @@map("assignment_modules")
+}
+
+/// Submission — answers JSON; final_score faqat server side (§6.4).
+model Submission {
+  id               String           @id @default(uuid()) @db.Uuid
+  schoolId         String           @map("school_id") @db.Uuid
+  assignmentId     String           @map("assignment_id") @db.Uuid
+  studentUserId    String           @map("student_user_id") @db.Uuid
+  enrollmentId     String?          @map("enrollment_id") @db.Uuid
+  status           SubmissionStatus @default(DRAFT)
+  answersJson      Json?            @map("answers_json") @db.JsonB
+  submittedAt      DateTime?        @map("submitted_at") @db.Timestamptz()
+  finalScore       Int?             @map("final_score")
+  finalGrader      String?          @map("final_grader")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz()
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  scores       SubmissionScore[]
+  feedbackList Feedback[]
+
+  @@unique([assignmentId, studentUserId])
+  @@map("submissions")
+}
+
+/// Immutable score history — source va rubric version (§6.4).
+model SubmissionScore {
+  id            String     @id @default(uuid()) @db.Uuid
+  submissionId  String     @map("submission_id") @db.Uuid
+  moduleId      String?    @map("module_id") @db.Uuid
+  source        ScoreSource
+  score         Int
+  maxScore      Int        @map("max_score")
+  breakdownJson Json?      @map("breakdown_json") @db.JsonB
+  rubricVersion Int        @default(1) @map("rubric_version")
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("submission_scores")
+}
+
+/// Feedback — teacher AI; rich sanitized body (§6.4).
+model Feedback {
+  id            String   @id @default(uuid()) @db.Uuid
+  submissionId  String   @map("submission_id") @db.Uuid
+  authorUserId  String?  @map("author_user_id") @db.Uuid
+  authorIsAi    Boolean  @default(false) @map("author_is_ai")
+  body          String
+  visibility    String   @default("STUDENT")
+  isFinalMarker Boolean  @default(false) @map("is_final_marker")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("feedback")
+}

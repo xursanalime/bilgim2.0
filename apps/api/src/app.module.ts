@@ -14,6 +14,7 @@ import { LandingModule } from './landing/landing.module';
 import { LearningModule } from './learning/learning.module';
 import { BillingModule } from './billing/billing.module';
 import { GamificationModule } from './gamification/gamification.module';
+import { HomeworkModule } from './homework/homework.module';
 
 /**
  * Modular monolith ildiz moduli (docs/bilgim2.0.md §5.6).
@@ -34,6 +35,7 @@ import { GamificationModule } from './gamification/gamification.module';
     LearningModule,
     BillingModule,
     GamificationModule,
+    HomeworkModule,
   ],
   providers: [envProvider, MetricsService],
   controllers: [HealthController, MetricsController],
