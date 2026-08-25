@@ -908,3 +908,104 @@ model CouponRedemption {
   @@unique([couponId, orderId])
   @@map("coupon_redemptions")
 }
+
+// ── Student gamification (Faza 4, §4.3.1) ──────────────────────────────────
+
+enum GamificationProfileState {
+  ACTIVE
+  FROZEN
+  ARCHIVED
+}
+
+/// Student XP/badge/streak profili — faqat STUDENT membership (§4.3.1).
+model StudentGamificationProfile {
+  id               String                 @id @default(uuid()) @db.Uuid
+  schoolId         String                 @map("school_id") @db.Uuid
+  studentMemberId  String                 @map("student_member_id") @db.Uuid
+  userId           String                 @map("user_id") @db.Uuid
+  state            GamificationProfileState @default(ACTIVE)
+  lifetimeXp       Int                    @default(0) @map("lifetime_xp")
+  currentLevel     Int                    @default(1) @map("current_level")
+  currentStreak    Int                    @default(0) @map("current_streak")
+  bestStreak       Int                    @default(0) @map("best_streak")
+  lastQualifyingDate DateTime?            @map("last_qualifying_date") @db.Timestamptz()
+  leaderboardOptIn Boolean               @default(false) @map("leaderboard_opt_in")
+  leaderboardAlias String?
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz()
+
+  xpEvents      XpEvent[]
+  streakDays    StreakDay[]
+  studentBadges StudentBadge[]
+
+  @@unique([schoolId, studentMemberId])
+  @@index([userId])
+  @@map("student_gamification_profiles")
+}
+
+/// Immutable XP ledger — signed/closed event_type, idempotency key (§4.3.1).
+model XpEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  profileId    String   @map("profile_id") @db.Uuid
+  eventType    String   @map("event_type")
+  amount       Int
+  policyVersion Int     @map("policy_version")
+  sourceEntity String?  @map("source_entity")
+  sourceId     String?  @map("source_id")
+  actorMemberId String? @map("actor_member_id")
+  idempotencyKey String @unique @map("idempotency_key")
+  occurredAt   DateTime @default(now()) @map("occurred_at") @db.Timestamptz()
+
+  profile StudentGamificationProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, occurredAt])
+  @@map("xp_events")
+}
+
+/// School-local streak day — unique (profile, local_date) (§4.3.1).
+model StreakDay {
+  id           String   @id @default(uuid()) @db.Uuid
+  profileId    String   @map("profile_id") @db.Uuid
+  localDate    DateTime @map("local_date") @db.Date
+  policyVersion Int     @map("policy_version")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  profile StudentGamificationProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, localDate])
+  @@map("streak_days")
+}
+
+/// Badge ta'rifi (immutable version) + student badge.
+model Badge {
+  id         String   @id @default(uuid()) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  key        String
+  version    Int      @default(1)
+  name       String
+  iconKey    String?  @map("icon_key")
+  criterionJson Json? @map("criterion_json") @db.JsonB
+  isPublished Boolean @default(false) @map("is_published")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  studentBadges StudentBadge[]
+
+  @@unique([schoolId, key, version])
+  @@map("badges")
+}
+
+model StudentBadge {
+  id        String   @id @default(uuid()) @db.Uuid
+  profileId String   @map("profile_id") @db.Uuid
+  badgeId   String   @map("badge_id") @db.Uuid
+  awardedAt DateTime @default(now()) @map("awarded_at") @db.Timestamptz()
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz()
+  sourceRef String?  @map("source_ref")
+
+  profile StudentGamificationProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  badge   Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("student_badges")
+}
