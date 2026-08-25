@@ -1,6 +1,6 @@
-import { loadServerEnv } from '@bilgim/domain/env';
+import { loadServerEnv } from '@bilgim/domain';
+import type { ServerEnv } from '@bilgim/domain';
 import type { Provider } from '@nestjs/common';
-import type { ServerEnv } from '@bilgim/domain/env';
 
 export const ENV = Symbol('ENV');
 
