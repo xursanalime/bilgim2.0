@@ -3,6 +3,45 @@ import { prisma } from '@bilgim/db';
 import type { MySchoolCard, SchoolMemberRole } from '@bilgim/domain';
 
 /**
+ * Login/verify tugagach server-side redirect qarorini ($2.2 AppEntryResolver).
+ * Active membership soniga qarab:
+ *   0  → teacher `/open-school`, boshqa user "maktabga qo'shilmagan" sahifasi;
+ *   1  → `https://{slug}.bilgim.uz` (student `/learn`, staff `/manage`) 302;
+ *   2+ → `https://bilgim.uz/my-schools` 302.
+ */
+export type EntryDecision =
+  | { kind: 'NO_MEMBERSHIP'; suggestedPath: '/open-school' | '/no-school' }
+  | { kind: 'REDIRECT_TENANT'; url: string }
+  | { kind: 'REDIRECT_MY_SCHOOLS'; url: string };
+
+export const ROOT_HOST = 'bilgim.uz';
+
+@Injectable()
+export class AppEntryResolver {
+  async resolve(userId: string): Promise<EntryDecision> {
+    const memberships = await prisma.schoolMember.findMany({
+      where: { userId, status: 'ACTIVE' },
+      select: {
+        role: true,
+        schoolId: true,
+        school: { select: { slug: true, ownerUserId: true } },
+      },
+    });
+
+    if (memberships.length === 0) {
+      return { kind: 'NO_MEMBERSHIP', suggestedPath: '/open-school' };
+    }
+    const first = memberships[0];
+    if (memberships.length === 1 && first) {
+      const role = first.role as SchoolMemberRole;
+      const defaultPath = role === 'STUDENT' ? '/learn' : '/manage';
+      return { kind: 'REDIRECT_TENANT', url: `${tenantHost(first.school.slug)}${defaultPath}` };
+    }
+    return { kind: 'REDIRECT_MY_SCHOOLS', url: `https://${ROOT_HOST}/my-schools` };
+  }
+}
+
+/**
  * `GET /v1/account/my-schools` read model (§2.2).
  * Faqat authenticated `userId` bo'yicha ACTIVE SchoolMember qatorlarini
  * o'qiydi; query/body'dagi `schoolId` qabul qilinmaydi. Response faqat
