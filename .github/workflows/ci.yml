@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint / Typecheck / Test / Build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: bilgim
+          POSTGRES_PASSWORD: bilgim_local_dev
+          POSTGRES_DB: bilgim
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bilgim -d bilgim"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://bilgim:bilgim_local_dev@localhost:5432/bilgim
+      # CI test qiymatlari — real secretlar hech qachon repoda bo'lmaydi (§9)
+      AUTH_ACCESS_SECRET: ci-only-test-secret-0123456789abcdef012345
+      AUTH_REFRESH_SECRET: ci-only-test-secret-fedcba98765432100123456789
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply DB migrations (release-job modeli)
+        run: pnpm --filter @bilgim/db db:migrate:deploy
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
