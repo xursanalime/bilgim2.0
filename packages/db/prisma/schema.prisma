@@ -63,6 +63,69 @@ enum ConsentStatus {
   REVOKED
 }
 
+// ── Catalog / cohort / learning (Faza 2, §6.3) ─────────────────────────────
+
+enum CourseVisibility {
+  DRAFT
+  PUBLIC
+  UNLISTED
+  ARCHIVED
+}
+
+enum LessonType {
+  VIDEO
+  LIVE
+  HYBRID
+  TEXT
+  QUIZ
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CohortStatus {
+  DRAFT
+  ACTIVE
+  FULL
+  CANCELLED
+  ENDED
+}
+
+enum PriceBillingModel {
+  FREE
+  ONE_TIME
+  INSTALLMENT
+  RECURRING_MEMBERSHIP
+}
+
+enum EnrollmentStatus {
+  PENDING_PAYMENT
+  PENDING_APPROVAL
+  ACTIVE
+  COMPLETED
+  REVOKED
+  REFUNDED
+}
+
+enum EnrollmentAccessSource {
+  ORDER
+  MEMBERSHIP
+  MANUAL
+  INVITE
+}
+
+enum LockedReason {
+  NOT_STARTED
+  DRIP
+  PREVIOUS_INCOMPLETE
+  MEMBERSHIP_PAST_DUE
+  ENROLLMENT_REVOKED
+  PLAN_LIMIT
+}
+
 /// Global user — authentication subyekti. Rol shu yerda YO'Q (§1.2):
 /// authorization SchoolMember orqali maktab bo'yicha bajariladi.
 model User {
@@ -113,6 +176,10 @@ model School {
   highlights LandingHighlight[]
   successStories LandingSuccessStory[]
   testimonials LandingTestimonial[]
+  courses Course[]
+  lessons Lesson[]
+  enrollments Enrollment[]
+  pricingOffers PricingOffer[]
 
   @@index([ownerUserId])
   @@map("schools")
@@ -302,6 +369,199 @@ model AuditEvent {
   @@index([schoolId, createdAt])
   @@index([actorUserId])
   @@map("audit_events")
+}
+
+// ── Catalog / Cohort (Faza 2) ──────────────────────────────────────────────
+
+/// Course — marketing/content konteyneri; narx cohort'a tegishli (§4.3).
+model Course {
+  id           String           @id @default(uuid()) @db.Uuid
+  schoolId     String           @map("school_id") @db.Uuid
+  slug         String
+  title        String
+  description  String?
+  level        String?
+  coverAssetId String?          @map("cover_asset_id") @db.Uuid
+  visibility   CourseVisibility @default(DRAFT)
+  /// Immutable published revision soni — published kontent o'chirilmaydi (§4.3)
+  version      Int              @default(1)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz()
+
+  school  School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  sections CourseSection[]
+  cohorts  Cohort[]
+  lessons  Lesson[]
+  enrollments Enrollment[]
+
+  @@unique([schoolId, slug])
+  @@index([schoolId, visibility])
+  @@map("courses")
+}
+
+/// Course ichidagi section — position bo'yicha immutable published revision.
+model CourseSection {
+  id        String   @id @default(uuid()) @db.Uuid
+  courseId  String   @map("course_id") @db.Uuid
+  title     String
+  position  Int
+  isPublished Boolean @default(false) @map("is_published")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@unique([courseId, position])
+  @@index([courseId])
+  @@map("course_sections")
+}
+
+/// Lesson — VIDEO|LIVE|HYBRID|TEXT|QUIZ (§4.3).
+model Lesson {
+  id              String       @id @default(uuid()) @db.Uuid
+  schoolId        String       @map("school_id") @db.Uuid
+  courseId        String       @map("course_id") @db.Uuid
+  sectionId       String?      @map("section_id") @db.Uuid
+  slug            String
+  type            LessonType
+  title           String
+  status          LessonStatus @default(DRAFT)
+  position        Int
+  contentJson     Json?        @map("content_json") @db.JsonB
+  estimatedMinutes Int?        @map("estimated_minutes")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz()
+
+  course  Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  section CourseSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  school  School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, slug])
+  @@index([schoolId])
+  @@map("lessons")
+}
+
+/// Cohort — vaqt, narx, capacity va haqiqiy guruh (§4.3).
+model Cohort {
+  id          String       @id @default(uuid()) @db.Uuid
+  schoolId    String       @map("school_id") @db.Uuid
+  courseId    String       @map("course_id") @db.Uuid
+  title       String
+  capacity    Int?
+  startsAt    DateTime?    @map("starts_at") @db.Timestamptz()
+  endsAt      DateTime?    @map("ends_at") @db.Timestamptz()
+  status      CohortStatus @default(DRAFT)
+  visibility  CourseVisibility @default(UNLISTED)
+  timezone    String       @default("Asia/Tashkent")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz()
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[]
+  teachers     CohortTeacher[]
+  offers       PricingOffer[]
+
+  @@index([schoolId, courseId])
+  @@map("cohorts")
+}
+
+/// Cohort teacher — PRIMARY|TEACHER, unique pair (§6.3).
+model CohortTeacher {
+  id       String @id @default(uuid()) @db.Uuid
+  cohortId String @map("cohort_id") @db.Uuid
+  memberId String @map("member_id") @db.Uuid
+  role     String @default("TEACHER")
+
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@unique([cohortId, memberId])
+  @@map("cohort_teachers")
+}
+
+// ── Pricing / Enrollment / Access (Faza 2) ─────────────────────────────────
+
+/// Versionlangan pricing offer — school-targetga bir faol versiya (§4.3, §6.3).
+model PricingOffer {
+  id              String           @id @default(uuid()) @db.Uuid
+  schoolId        String           @map("school_id") @db.Uuid
+  sellableType    String           @map("sellable_type") // COURSE | COHORT | MEMBERSHIP_PLAN
+  sellableId      String?          @map("sellable_id")
+  cohortId        String?          @map("cohort_id") @db.Uuid
+  version         Int              @default(1)
+  billingModel    PriceBillingModel @map("billing_model")
+  priceUzs        Int              @map("price_uzs")
+  intervalDays    Int?             @map("interval_days")
+  trialDays       Int?             @map("trial_days")
+  enrollmentApproval Boolean         @default(true) @map("enrollment_approval")
+  availability    String           @default("OPEN") // OPEN | WAITLIST | CLOSED
+  capacity        Int?
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  cohort Cohort? @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, sellableType, sellableId])
+  @@map("pricing_offers")
+}
+
+/// Enrollment — student ning course/cohort accessi. Unique active per (student,cohort).
+model Enrollment {
+  id            String               @id @default(uuid()) @db.Uuid
+  schoolId      String               @map("school_id") @db.Uuid
+  studentUserId String               @map("student_user_id") @db.Uuid
+  courseId      String               @map("course_id") @db.Uuid
+  cohortId      String?              @map("cohort_id") @db.Uuid
+  status        EnrollmentStatus     @default(PENDING_APPROVAL)
+  accessSource  EnrollmentAccessSource @default(MANUAL) @map("access_source")
+  offerVersion  Int?
+  activatedAt   DateTime?            @map("activated_at") @db.Timestamptz()
+  expiresAt     DateTime?            @map("expires_at") @db.Timestamptz()
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  cohort Cohort? @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  lessonAccess LessonAccess[]
+
+  @@index([schoolId, studentUserId, status])
+  @@map("enrollments")
+}
+
+/// Lesson access — server hisoblaydi; student uchun DRIP/lock (§4.3, §4.5).
+model LessonAccess {
+  id            String       @id @default(uuid()) @db.Uuid
+  enrollmentId  String       @map("enrollment_id") @db.Uuid
+  lessonId      String       @map("lesson_id") @db.Uuid
+  schoolId      String       @map("school_id") @db.Uuid
+  availableAt   DateTime?    @map("available_at") @db.Timestamptz()
+  lockedReason  LockedReason? @map("locked_reason")
+  completedAt   DateTime?    @map("completed_at") @db.Timestamptz()
+  lastPositionSeconds Int?   @map("last_position_seconds")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz()
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId])
+  @@index([schoolId])
+  @@map("lesson_access")
+}
+
+/// Immutable progress events — dedupe source event; rollup lesson_access (§6.3).
+model LessonProgressEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  enrollmentId String   @map("enrollment_id") @db.Uuid
+  lessonId     String   @map("lesson_id") @db.Uuid
+  eventType    String   @map("event_type") // WATCH|OPEN|COMPLETE
+  sourceKey    String?  @unique @map("source_key")
+  occurredAt   DateTime @default(now()) @map("occurred_at") @db.Timestamptz()
+
+  @@index([enrollmentId, lessonId])
+  @@map("lesson_progress_events")
 }
 
 /// Refresh session — hashed refresh token, rotation/reuse detection Faza 1'da.
