@@ -13,6 +13,7 @@ import { EnrollmentModule } from './enrollment/enrollment.module';
 import { LandingModule } from './landing/landing.module';
 import { LearningModule } from './learning/learning.module';
 import { BillingModule } from './billing/billing.module';
+import { GamificationModule } from './gamification/gamification.module';
 
 /**
  * Modular monolith ildiz moduli (docs/bilgim2.0.md §5.6).
@@ -32,6 +33,7 @@ import { BillingModule } from './billing/billing.module';
     LandingModule,
     LearningModule,
     BillingModule,
+    GamificationModule,
   ],
   providers: [envProvider, MetricsService],
   controllers: [HealthController, MetricsController],
