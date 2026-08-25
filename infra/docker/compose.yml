@@ -1,0 +1,64 @@
+# Bilgim lokal development stack.
+# Production'da boshqa infratuzilma ishlatiladi (docs/bilgim2.0.md §5.1);
+# bu fayl faqat lokal dev uchun: PostgreSQL, Redis va MinIO (S3/R2-mos).
+#
+# Ishga tushirish:
+#   docker compose -f infra/docker/compose.yml up -d
+name: bilgim
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: bilgim-postgres
+    environment:
+      POSTGRES_USER: bilgim
+      POSTGRES_PASSWORD: bilgim_local_dev
+      POSTGRES_DB: bilgim
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bilgim -d bilgim']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: bilgim-redis
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '127.0.0.1:6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Cloudflare R2 S3-mos API emulyatsiyasi — R2 signed-upload smoke testlari
+  # lokalda MinIO orqali tekshiriladi (production'da haqiqiy R2 ishlatiladi).
+  minio:
+    image: minio/minio:latest
+    container_name: bilgim-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: bilgim-minio
+      MINIO_ROOT_PASSWORD: bilgim_minio_local_dev
+    ports:
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
