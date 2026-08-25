@@ -1,0 +1,28 @@
+{
+  "name": "@bilgim/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bilgim API — NestJS modular monolith (REST/OpenAPI + Socket.IO)",
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "lint": "eslint src/",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"no tests yet\""
+  },
+  "dependencies": {
+    "@bilgim/domain": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "prom-client": "^15.1.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0"
+  }
+}
