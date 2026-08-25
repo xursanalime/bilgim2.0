@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { prisma } from '@bilgim/db';
 import { schoolSlugIssues, normalizeSlug } from '@bilgim/domain';
 import type { TenantResolveResult } from '../tenant/tenant-resolver.service';
+import { type BillingSeedingService } from '../billing/billing-seeding.service';
 
 export interface CreateSchoolInput {
   ownerUserId: string;
@@ -18,12 +19,14 @@ export interface ProvisioningResult {
 
 /**
  * School provisioning wizard (docs §4.1, §10). Owner userni ACTIVE SchoolMember
- * va DRAFT School qilib yaratadi (owner role). Slug validatsiya §2.1;
- * reserved sluglar rad etiladi. Faza 3'gacha Free subscription row ishlatilmaydi
- * (keyingi qadamlarda qo'shiladi).
+ * va ACTIVE School qilib yaratadi (owner role). Slug validatsiya §2.1;
+ * reserved sluglar rad etiladi. Maktab yaratilganda Free subscription snapshot
+ * va usage wallet provision qilinadi (§4.4).
  */
 @Injectable()
 export class SchoolsService {
+  constructor(private readonly billing: BillingSeedingService) {}
+
   async createSchool(input: CreateSchoolInput): Promise<ProvisioningResult> {
     const slug = normalizeSlug(input.slug);
     const issues = schoolSlugIssues(slug);
@@ -77,6 +80,9 @@ export class SchoolsService {
       });
       return created;
     });
+
+    // Free subscription + usage wallet (§4.4): school yaratilgach darhol.
+    await this.billing.provisionFreeSubscription(school.id);
 
     return {
       schoolId: school.id,
