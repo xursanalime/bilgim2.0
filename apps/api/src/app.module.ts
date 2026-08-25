@@ -11,6 +11,7 @@ import { CatalogModule } from './catalog/catalog.module';
 import { PublicModule } from './public/public.module';
 import { EnrollmentModule } from './enrollment/enrollment.module';
 import { LandingModule } from './landing/landing.module';
+import { LearningModule } from './learning/learning.module';
 
 /**
  * Modular monolith ildiz moduli (docs/bilgim2.0.md §5.6).
@@ -28,6 +29,7 @@ import { LandingModule } from './landing/landing.module';
     PublicModule,
     EnrollmentModule,
     LandingModule,
+    LearningModule,
   ],
   providers: [envProvider, MetricsService],
   controllers: [HealthController, MetricsController],
