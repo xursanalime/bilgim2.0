@@ -14,4 +14,10 @@ export class PublicController {
   async catalog(@Param('slug') slug: string) {
     return this.catalogService.catalog(slug);
   }
+
+  @Get(':slug/landing')
+  @Header('Cache-Control', 'public, max-age=60')
+  async landing(@Param('slug') slug: string) {
+    return this.catalogService.landing(slug);
+  }
 }

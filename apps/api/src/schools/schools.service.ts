@@ -68,6 +68,13 @@ export class SchoolsService {
           schoolId: created.id,
         },
       });
+      await tx.schoolLandingPage.create({
+        data: {
+          schoolId: created.id,
+          template: 'CLASSIC',
+          heroJson: { name: input.name, headline: '' },
+        },
+      });
       return created;
     });
 
