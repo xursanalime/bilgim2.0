@@ -1,0 +1,23 @@
+{
+  "name": "@bilgim/i18n",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bilgim i18n — uz/ru/en xabarlari (default: uz)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp -r src/messages dist/",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src/",
+    "test": "echo \"no tests yet\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0"
+  }
+}
