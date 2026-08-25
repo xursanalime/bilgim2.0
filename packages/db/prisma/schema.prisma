@@ -780,3 +780,131 @@ model UsageCharge {
   @@index([subscriptionId])
   @@map("usage_charges")
 }
+
+// ── Orders / Payments / Coupons (Faza 3, §6.5) ─────────────────────────────
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  CANCELED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentState {
+  INITIATED
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  PAYME
+  CLICK
+  UZUM
+}
+
+/// Student course/cohort yoki SaaS subscription order — immutable money snapshot.
+model Order {
+  id            String      @id @default(uuid()) @db.Uuid
+  schoolId      String      @map("school_id") @db.Uuid
+  buyerUserId   String      @map("buyer_user_id") @db.Uuid
+  purpose       String      // STUDENT_ENROLLMENT | STUDENT_MEMBERSHIP | INSTALLMENT_DUE | SCHOOL_SUBSCRIPTION | USAGE_WALLET_TOPUP
+  status        OrderStatus @default(PENDING)
+  subtotalUzs   Int         @map("subtotal_uzs")
+  discountUzs   Int         @default(0) @map("discount_uzs")
+  totalUzs      Int         @map("total_uzs")
+  currency      String      @default("UZS")
+  idempotencyKey String?    @unique @map("idempotency_key")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz()
+
+  items    OrderItem[]
+  payments Payment[]
+  couponRedemptions CouponRedemption[]
+
+  @@index([schoolId, buyerUserId])
+  @@map("orders")
+}
+
+/// Course narxi klientdan qabul qilinmaydi (§6.5) — server snapshot.
+model OrderItem {
+  id            String  @id @default(uuid()) @db.Uuid
+  orderId       String  @map("order_id") @db.Uuid
+  referenceType String  @map("reference_type") // COURSE | COHORT | MEMBERSHIP_PLAN | PLAN
+  referenceId   String  @map("reference_id")
+  quantity      Int     @default(1)
+  unitUzs       Int     @map("unit_uzs")
+  totalUzs      Int     @map("total_uzs")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+/// Payment — provider tx. unique (provider, provider_transaction_id) (§6.5).
+model Payment {
+  id            String         @id @default(uuid()) @db.Uuid
+  orderId       String         @map("order_id") @db.Uuid
+  provider      PaymentProvider
+  providerTxId  String?        @map("provider_tx_id")
+  state         PaymentState   @default(INITIATED)
+  amountUzs     Int            @map("amount_uzs")
+  providerPayload Json?        @map("provider_payload") @db.JsonB
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz()
+
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events PaymentEvent[]
+
+  @@unique([provider, providerTxId])
+  @@index([orderId])
+  @@map("payments")
+}
+
+model PaymentEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  paymentId   String   @map("payment_id") @db.Uuid
+  providerEventId String? @unique @map("provider_event_id")
+  eventType   String   @map("event_type")
+  payloadHash String?  @map("payload_hash")
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz()
+  result      String?
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_events")
+}
+
+/// Coupon — school-scoped, case-insensitive code.
+model Coupon {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  code         String   @unique
+  discountPercent Int?  @map("discount_percent")
+  discountFixedUzs Int? @map("discount_fixed_uzs")
+  maxRedemptions Int?   @map("max_redemptions")
+  startsAt     DateTime? @map("starts_at") @db.Timestamptz()
+  endsAt       DateTime? @map("ends_at") @db.Timestamptz()
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  redemptions CouponRedemption[]
+
+  @@map("coupons")
+}
+
+model CouponRedemption {
+  id        String   @id @default(uuid()) @db.Uuid
+  couponId  String   @map("coupon_id") @db.Uuid
+  orderId   String   @map("order_id") @db.Uuid
+  discountUzs Int    @map("discount_uzs")
+  redeemedBy String  @map("redeemed_by")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, orderId])
+  @@map("coupon_redemptions")
+}
