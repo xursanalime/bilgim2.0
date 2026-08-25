@@ -1135,3 +1135,91 @@ model Feedback {
 
   @@map("feedback")
 }
+
+// ── Live classroom (Faza 5, §6.6, §7) ──────────────────────────────────────
+
+enum RecordingState {
+  OFF
+  REQUESTED
+  APPROVED
+  RECORDING
+  DECLINED
+}
+
+enum LiveSessionState {
+  SCHEDULED
+  PRE_JOIN
+  LIVE
+  ENDED
+  CANCELED
+}
+
+enum LiveVisibility {
+  ENROLLED_ONLY
+  COHORT_ONLY
+  PUBLIC_VIEW_ONLY
+}
+
+/// Live session — recording_state OFF default; egress faqat RECORDING'da (§7.2.1).
+model LiveSession {
+  id             String           @id @default(uuid()) @db.Uuid
+  schoolId       String           @map("school_id") @db.Uuid
+  lessonId       String?          @map("lesson_id") @db.Uuid
+  title          String
+  visibility     LiveVisibility   @default(ENROLLED_ONLY)
+  roomName       String?          @unique @map("room_name")
+  livekitRoomId  String?          @map("livekit_room_id")
+  scheduledAt    DateTime         @map("scheduled_at") @db.Timestamptz()
+  startedAt      DateTime?        @map("started_at") @db.Timestamptz()
+  endedAt        DateTime?        @map("ended_at") @db.Timestamptz()
+  state          LiveSessionState @default(SCHEDULED)
+  hostMemberId   String?          @map("host_member_id")
+  recordingState RecordingState   @default(OFF) @map("recording_state")
+  recordingRequesterId String?     @map("recording_requester_id")
+  recordingApproverId String?      @map("recording_approver_id")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz()
+
+  participantEntries LiveParticipant[]
+  recordings         Recording[]
+
+  @@index([schoolId, scheduledAt])
+  @@map("live_sessions")
+}
+
+/// Live participant — join/leave, quality aggregates; unique session/user.
+model LiveParticipant {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  guestName String?  @map("guest_name")
+  role      String   @default("STUDENT")
+  joinedAt  DateTime? @map("joined_at") @db.Timestamptz()
+  leftAt    DateTime? @map("left_at") @db.Timestamptz()
+  durationSec Int?    @map("duration_sec")
+  acknowledgedRecording Boolean @default(false) @map("acknowledged_recording")
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@map("live_participants")
+}
+
+/// Recording — faqat RECORDING state'dan Egress orqali yaratiladi (§7.2.1).
+model Recording {
+  id          String   @id @default(uuid()) @db.Uuid
+  sessionId   String   @map("session_id") @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  egressId    String?  @unique @map("egress_id")
+  state       String   @default("PENDING")
+  durationSec Int?
+  assetKey    String?  @map("asset_key")
+  retentionDays Int?   @default(180) @map("retention_days")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("recordings")
+}

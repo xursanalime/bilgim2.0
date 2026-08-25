@@ -15,6 +15,7 @@ import { LearningModule } from './learning/learning.module';
 import { BillingModule } from './billing/billing.module';
 import { GamificationModule } from './gamification/gamification.module';
 import { HomeworkModule } from './homework/homework.module';
+import { LiveModule } from './live/live.module';
 
 /**
  * Modular monolith ildiz moduli (docs/bilgim2.0.md §5.6).
@@ -36,6 +37,7 @@ import { HomeworkModule } from './homework/homework.module';
     BillingModule,
     GamificationModule,
     HomeworkModule,
+    LiveModule,
   ],
   providers: [envProvider, MetricsService],
   controllers: [HealthController, MetricsController],
