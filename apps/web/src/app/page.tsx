@@ -1,16 +1,28 @@
 import { GraduationCap } from 'lucide-react';
 import { Button } from '@bilgim/ui';
 import { getDictionary } from '@bilgim/i18n';
+import { tenantSlug, getLanding, getCatalog } from '../lib/public';
+import { TenantLanding } from '../components/tenant/TenantLanding';
+
+export const dynamic = 'force-dynamic';
 
 /**
- * Root surface placeholder (bilgim.uz).
- * To'liq marketing landing'i keyingi qadamlarda shu route ustida quriladi;
- * bu sahifa Faza 0'da "blank app deploy" exit criterionini ko'rsatadi va
- * tema tokenlari + i18n oqimini real holatda tekshirish uchun xizmat qiladi.
+ * Root/tenant routing (§2): 
+ * — bilgim.uz (root host) → marketing placeholder;
+ * — slug.bilgim.uz (tenant, middleware x-bilgim-tenant-slug set qiladi) →
+ *   published public landing (§4.1.1). Draft/non-active landing → mismatch.
  */
-export default function RootPage() {
-  const t = getDictionary('uz').common;
+export default async function RootPage() {
+  const slug = await tenantSlug();
+  if (slug) {
+    const landing = await getLanding(slug);
+    const courses = await getCatalog(slug);
+    if (landing) {
+      return <TenantLanding landing={landing} courses={courses} />;
+    }
+  }
 
+  const t = getDictionary('uz').common;
   return (
     <main
       style={{
