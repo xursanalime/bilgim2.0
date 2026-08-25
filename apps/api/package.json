@@ -12,10 +12,13 @@
     "test": "echo \"no tests yet\""
   },
   "dependencies": {
+    "@bilgim/db": "workspace:^",
     "@bilgim/domain": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
+    "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.0.0",
+    "@node-rs/argon2": "^2.0.2",
     "@opentelemetry/auto-instrumentations-node": "^0.56.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
     "@opentelemetry/sdk-node": "^0.57.0",
